@@ -1,0 +1,77 @@
+version: "3.9"
+
+# ============================================================
+# ServiceOps — IT Ticketing & KPI Management System
+# Full stack: MongoDB + FastAPI + React (Nginx) + Cron
+# ============================================================
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: serviceops-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks: [serviceops]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: serviceops-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+    depends_on:
+      mongo:
+        condition: service_healthy
+    expose:
+      - "8001"
+    networks: [serviceops]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;\ntry: urllib.request.urlopen('http://localhost:8001/api/public/status', timeout=3); sys.exit(0)\nexcept: sys.exit(1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Kosongkan supaya API dipanggil relatif (nginx proxy). Set kalau backend beda domain.
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-}
+    container_name: serviceops-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${APP_PORT:-8080}:80"
+    networks: [serviceops]
+
+  cron:
+    build:
+      context: ./cron
+      dockerfile: Dockerfile
+    container_name: serviceops-cron
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [serviceops]
+
+networks:
+  serviceops:
+    driver: bridge
+
+volumes:
+  mongo_data:
+    driver: local

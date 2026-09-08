@@ -293,8 +293,11 @@ async def enrich_ticket(t: Dict[str, Any]) -> Dict[str, Any]:
 def set_auth_cookies(response: Response, user_id: str):
     access = create_token(user_id, "access")
     refresh = create_token(user_id, "refresh")
-    response.set_cookie("access_token", access, httponly=True, secure=True, samesite="none", max_age=60 * 60 * 12, path="/")
-    response.set_cookie("refresh_token", refresh, httponly=True, secure=True, samesite="none", max_age=60 * 60 * 24 * 7, path="/")
+    # Cookie policy — configurable supaya bekerja di HTTP local & HTTPS production
+    same_site = os.environ.get("COOKIE_SAMESITE", "none").lower()  # "none" | "lax" | "strict"
+    secure = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
+    response.set_cookie("access_token", access, httponly=True, secure=secure, samesite=same_site, max_age=60 * 60 * 12, path="/")
+    response.set_cookie("refresh_token", refresh, httponly=True, secure=secure, samesite=same_site, max_age=60 * 60 * 24 * 7, path="/")
 
 @api.post("/auth/login")
 async def login(body: LoginIn, response: Response):
