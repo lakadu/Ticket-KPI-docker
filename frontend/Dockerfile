@@ -41,7 +41,7 @@ RUN test -f /app/build/index.html || echo '<html><body>Build pending...</body></
 FROM nginx:1.27-alpine
 
 # Copy nginx config
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy build output (or placeholder if build failed)
 COPY --from=builder /app/build /usr/share/nginx/html
