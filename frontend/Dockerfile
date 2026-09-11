@@ -16,24 +16,26 @@ ENV NODE_OPTIONS=--max-old-space-size=3072
 RUN apk add --no-cache python3 make g++
 
 # Copy package files
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json* yarn.lock* ./
 
-# Install dependencies
-RUN npm ci --only=production --legacy-peer-deps 2>&1 | grep -v "peer dep" || true
-RUN npm ci --legacy-peer-deps 2>&1 | grep -v "peer dep" || true
+# Try yarn first, fall back to npm
+RUN if [ -f yarn.lock ]; then \
+      yarn install --frozen-lockfile --network-timeout 600000; \
+    else \
+      npm ci --legacy-peer-deps; \
+    fi
 
 # Copy source
 COPY . ./
 
-# Remove local env and config files
-RUN rm -f .env .env.local .env.development .gitignore craco.config.js
+# Remove local env files
+RUN rm -f .env .env.local .env.development
 
-# Build with craco directly or fallback to react-scripts
-RUN npm run build 2>&1 || true
+# Build
+RUN npm run build || yarn build
 
-# Ensure build directory exists
-RUN test -d /app/build || mkdir -p /app/build
-RUN test -f /app/build/index.html || echo '<html><body>Build pending...</body></html>' > /app/build/index.html
+# Verify build succeeded
+RUN test -f /app/build/index.html || (echo "BUILD FAILED: No index.html found" && exit 1)
 
 # =========================================
 # Stage 2 — Serve with Nginx
@@ -43,8 +45,11 @@ FROM nginx:1.27-alpine
 # Copy nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copy build output (or placeholder if build failed)
+# Copy build output - must exist
 COPY --from=builder /app/build /usr/share/nginx/html
+
+# Verify files copied
+RUN test -f /usr/share/nginx/html/index.html || (echo "ERROR: index.html not copied" && exit 1)
 
 EXPOSE 80
 
