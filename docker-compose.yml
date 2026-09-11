@@ -35,18 +35,17 @@ services:
       - "8001"
     networks: [serviceops]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys;\ntry: urllib.request.urlopen('http://localhost:8001/api/public/status', timeout=3); sys.exit(0)\nexcept: sys.exit(1)"]
-      interval: 20s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/public/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Kosongkan supaya API dipanggil relatif (nginx proxy). Set kalau backend beda domain.
         REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-}
     container_name: serviceops-frontend
     restart: unless-stopped
@@ -64,8 +63,7 @@ services:
     restart: unless-stopped
     env_file: .env
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
     networks: [serviceops]
 
 networks:
